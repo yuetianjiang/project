@@ -1,0 +1,89 @@
+---
+title: "Project Proposal: Bankruptcy Prediction Models for US Companies"
+author: "Alice Jiang"
+date: "2/8/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(tinytex.verbose = TRUE)
+```
+
+# Introduction
+
+US corporate bankruptcy reached its highest level in a decade in 2020 amid the COVID-19 pandemic. A total of 630 companies declared bankruptcy in 2020, and businesses large and small across industries are succumbing to the effects of the coronavirus^1^. Several high-profile companies, including The Hertz Corp., J.Crew Group, Inc., Frontier Communications Corp., and Diamond Offshore Drilling, Inc., filed for bankruptcy as the pandemic and lockdown suppressed economic activity^2^. Entering into 2021, economic recovery proves to be sluggish than expected, delayed by slow vaccine rollouts. As companies continue to struggle under growing debt burdens and subdued revenues, the wave of bankruptcies could get bigger. In times like these, the ability to accurately predict financial distress and bankruptcy for companies becomes particularly relevant. Accurate prediction of corporate bankruptcy can have important implications for creditors, shareholders, suppliers, employees and other parties, as well as potential cost savings for the overall economy. 
+
+## Project Objective
+
+In this study, we will investigate key financial, market, and macroeconomic factors that predict bankruptcy for US companies. Bankruptcy is defined by the action when a company files for either Chapter 7 or Chapter 11 under the United States Bankruptcy Code. A case filed under Chapter 7 results in the liquidation of the company, as all business operations are eased and assets are sold to pay off debts owed to creditors. Chapter 11 bankruptcy is referred to as the reorganization bankruptcy, under which the company refinances and restructures its business in order to become solvent again^3^. The financial, market, and macroeconomic variables will be selected based on prior research studies. 
+
+### Financial Ratios
+
+Extensive research has focused on analyzing financial ratios for bankruptcy prediction. Of the 752 different factors considered in 165 bankruptcy prediction studies from 1930-2007 as reviewed in Gissel et al. (2007), Return on Assets, Current Ratio, Working Capital / Total Assets, Retained Earnings / Total Assets, EBIT / Total Assets, Sales / Total Assets are the most commonly included variables^4^. Interestingly, the last four variables are all ratios used to calculate Altman Z-Score, along with Market Value of Equity / Book Value of Total Liabilities. Altman Z-Score is a weighted sum of the five financial ratios, first identified in Altman's 1968 study, that predicts the probability of corporate bankruptcy^5^. 
+
+We have chosen a tentative list of financial ratios for bankruptcy prediction as follows. These ratios measure the profitability, liquidity, or leverage of a company and are selected based on prior research and practice in credit analysis.
+
+- Return on Assets (Net Income / Average Total Assets)
+- Return on Equity (Net Income / Average Shareholders' Equity)
+- Working Capital / Total Assets
+- Retained Earnings / Total Assets
+- EBIT / Total Assets
+- Sales / Total Assets
+- Profit Margin (Net Income / Sales)
+- Debt to Assets
+- Debt to Equity
+- Current Ratio (Current Assets / Current Liabilities)
+- Interest Coverage Ratio (EBIT / Interest Expense)
+- Cash Coverage Ratio and/or Asset Coverage Ratio
+- Cash Flow to Total Debt (Cash from Operations / Total Debt)
+- Interest Coverage Ratio (EBIT / Interest Expense)
+
+Recent researchers have also looked at a combined approach to bankruptcy prediction, including not only financial ratios but also market variables, as well as macroeconomic factors. 
+
+### Market Variables 
+
+Tinoco and Wilson (2013) studied bankruptcy prediction among listed UK companies using financial ratios, market and macroeconomic variables^6^. The study found that market variables provide additional information not contained in the financial ratios and help improve accuracy in the prediction model. Results for macroeconomic variables, however, are less conclusive. 
+
+In our study, we will focus on market variables including the company's:
+
+- Stock Price
+- Stock Price Volatility
+- Market Cap / Total Debt
+- Size Relative to the S&P500 Market Value
+
+### Macroeconomic Indicators
+
+Although macroeconomic indicators are not commonly included in bankruptcy prediction models, and so far they have shown weak evidence of improvement for prediction accuracy, we believe recent events have shown the impact of macro environment on the survival of companies.
+
+Building onto the two macroeconomic variables included in Tinoco and Wilson (2013), we will explore the following factors in our study^6^.
+
+- 3-month US Treasury Yield (inflation-adjusted) 
+- Consumer Price Index (base 100)
+- Monthly Changes in Nonfarm Payroll
+- Crude Oil Price
+
+As noted in Gissel et al. (2007), researchers have found that a large number of factors does not necessarily improve a model's predictive ability for bankruptcy^4^. Thus, we will conduct our analysis using the above financial, market, and macroeconomic factors, with the objective of building a parsimonious model with high predictive power for corporate bankruptcy. 
+
+# Data
+
+The data will contain companies that filed for bankruptcy from January 1, 2017 to December 31, 2020 as bankrupt companies in the sample. Information for these company could be retrieved from the website of the US Securities and Exchange Commission, as companies who filed for bankruptcy in most instances get delisted from stock exchanges. In total, 6,556 companies submitted Form 25 (Notification of Removal From Listing) from 2017 to 2020^7^. Cross-reference with FactSet data will be performed to weed out non-bankruptcy related delisting instances, such as delisting due to merger or buyout reasons. 
+
+Another sample of non-bankrupt companies will be selected from the universe of listed companies in similar industry and size (in terms of total assets) as the bankrupt companies. Data on the company's financial information for ratio analysis, share price and other market-related factors will be obtained through FactSet screening. In a preliminary search, 29,107 companies are found in the FactSet database when filtered for public companies traded on US stock exchange and with operations in the US. Data on macroeconomic indicators will also be obtained from FactSet database and Federal Reserve Economic Data^8^.
+
+# Methodology
+
+Based on available literature, discriminant analysis and neural network are two popular methods used for bankruptcy prediction. In recent years, researchers have also studied the combined approach (i.e. financial ratios and market variables) using logistic regression and hazard models. The study will potentially focus on logistic regression and hazard models for bankrutpcy prediction, depending on the results of more in-depth data exploration.  
+
+# References
+
+1. https://www.spglobal.com/marketintelligence/en/news-insights/latest-news-headlines/us-corporate-bankruptcies-end-2020-at-10-year-high-amid-covid-19-pandemic-61973656
+2. https://www.nytimes.com/2020/06/18/business/corporate-bankruptcy-coronavirus.html
+3. https://www.sec.gov/reportspubs/investor-publications/investorpubsbankrupthtm.html
+4. https://epublications.marquette.edu/cgi/viewcontent.cgi?article=1025&context=account_fac
+5. http://pages.stern.nyu.edu/~ealtman/Zscores.pdf
+6. https://www.sciencedirect.com/science/article/pii/S1057521913000227
+7. https://www.sec.gov/cgi-bin/srch-edgar?text=form-type%3D25-nse&first=2017&last=2020
+8. https://fred.stlouisfed.org/
+
+

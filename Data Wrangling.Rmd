@@ -20,9 +20,10 @@ library(ggplot2)
 bankruptcy_financials <- read.csv("data/bankruptcy.csv")
 stock_price <- read.csv("data/stock price.csv")
 stock_price <- stock_price[, -(2:4)]
-oil <- read.csv("data/Brent Crude Oil.csv")
-cpi <- read.csv("data/Core CPI.csv")
-yield <- read.csv("data/3-month yield.csv")
+oil <- read.csv("data/Brent Crude Oil.csv") # https://fred.stlouisfed.org/series/POILBREUSDM
+cpi <- read.csv("data/Core CPI.csv") # https://fred.stlouisfed.org/series/CPILFESL
+yield <- read.csv("data/3-month yield.csv") # https://fred.stlouisfed.org/series/DGS3MO#0
+nonfarm_payroll <- read.csv("data/nonfarm payroll.csv")
 ```
 
 ```{r}
@@ -184,10 +185,41 @@ data <- data %>%
   )
 ```
 
+```{r match3}
+# match year to latest available data based on revenue
+year <- data$Year
+n <- rep(0, length(year))
+var_new <- rep("", length(year))
+latest_year <- rep(0, length(year))
+var <- "Net.Sales"
+for (i in 1:length(year)) {
+  while (TRUE) {
+    n[i] <- 2021 - year[i]
+    if (n[i] == 0) {
+      var_new[i] <- var
+    }
+    else if (n[i] > 0) {
+      var_new[i] <- paste0(var, ".", n[i])
+    }
+    if (!is.na(data[[var_new[i]]][i])) {
+      latest_year[i] <- year[i] # year with the latest available data 
+      break
+    }
+    if (n[i] == 11) {
+      latest_year[i] <- NA # loops to 2010 data
+      break
+    }
+    year[i] <-
+      year[i] - 1 # goes back one year if current data is NA
+  }
+}
+data$Latest_Year <- latest_year
+```
+
 ## Select Universe of Companies (bankrupt and non-bankrupt)
 ```{r filter_data}
 final_data <- data %>%
-  select(Symbol, Name, Bankrupt, FactSet.Econ.Sector, FactSet.Ind, Entity.NAICS.Sector.Full, Year, Month, 281:302)
+  select(Symbol, Name, Bankrupt, FactSet.Econ.Sector, FactSet.Ind, Entity.NAICS.Sector.Full, Year, Latest_Year, Month, 281:302, X3y.Price.Volatility, X5y.Price.Volatility)
 # dim(final_data)
 
 cols <- c("Total_Assets", "Net_Sales", "EV_to_Sales", "EBITDA", "ROA", "ROE", "Working_Capital",
@@ -204,7 +236,8 @@ final_data[cols] <- lapply(final_data[cols], as.numeric)
 final_data$Bankrupt <- as.factor(final_data$Bankrupt)
 final_data <- final_data %>%
   mutate(Bankrupt = ifelse(Bankrupt == 0, "No", "Yes"))
-cols <- c("Closing_Price_Dec", "Closing_Price_Mar", "Closing_Price_Jun", "Closing_Price_Sep", "Market_Value")
+cols <- c("Closing_Price_Dec", "Closing_Price_Mar", "Closing_Price_Jun", "Closing_Price_Sep", "Market_Value", 
+          "X3y.Price.Volatility", "X5y.Price.Volatility")
 final_data[cols] <- lapply(final_data[cols], as.numeric)
 ```
 
@@ -856,18 +889,54 @@ subset_final_data <- subset_final_data %>%
          EBITDA_Interest_Coverage_Ratio =
            EBITDA / Interest_Expense,
          Cash_Flow_to_Total_Debt = 
-           Cash_From_Operations / Total_Debt
+           Cash_From_Operations / Total_Debt,
+         Market_Value_to_Total_Debt = 
+           Market_Value / Total_Debt
          )
   
 cleaned_data <- subset_final_data %>%
-  select(1:3, 6:8, "ROA", "ROE", "Working_Capital_to_Total_Assets",
+  select(1:3, 6:9, "ROA", "ROE", "Working_Capital_to_Total_Assets",
          "Retained_Earnings_to_Total_Assets", "EBITDA_to_Total_Assets",
          "Debt_to_EBITDA", "Sales_to_Total_Assets", "Profit_Margin",
          "Debt_to_Assets", "Debt_to_Equity", "Current_Ratio", "Interest_Coverage_Ratio",
-         "EBITDA_Interest_Coverage_Ratio", "Cash_Flow_to_Total_Debt",
-         27:30
+         "EBITDA_Interest_Coverage_Ratio", "Cash_Flow_to_Total_Debt", "Market_Value_to_Total_Debt",
+         27:33
          )
-#dim(cleaned_data)
+# dim(cleaned_data)
 ```
 
+```{r match4}
+# match market/macro data to the corresponding month and year
+match4 <- function(year, month, list) {
+  # data$Latest_Year, data$Month, e.g. cpi$CPILFESL
+  matrix <- matrix(unlist(list), ncol = 12, byrow = TRUE) # row by year and col by month
+  output <- rep(0, length(year))
+  for (i in 1:length(year)) {
+    row <- year[i] - 2009 # year (2010-2020)
+    col <- month[i] # month (1-12)
+    output[i] <- matrix[row, col]
+  }
+  return(output)
+}
+```
 
+```{r}
+list_cpi <- cpi$CPILFESL 
+list_cpi <- list_cpi[-133] # remove 2021 data
+list_yield <- yield$DGS3MO
+list_yield <- list_yield[-c(133:134)] # remove 2021 data
+list_oil <- oil$POILBREUSDM
+list_oil <- list_oil[-133] # remove 2021 data
+list_payroll <- nonfarm_payroll$Nonfarm.employment
+list_payroll <- list_payroll[-133] # remove 2021 data
+cleaned_data <- cleaned_data %>%
+  mutate(CPI = match4(Latest_Year, Month, list_cpi),
+         Yield = match4(Latest_Year, Month, list_yield),
+         Oil = match4(Latest_Year, Month, list_oil),
+         Nonfarm_Payroll = match4(Latest_Year, Month, list_payroll) # monthly changes in thousands
+  )
+```
+
+```{r export_data}
+# write.csv(cleaned_data, file = "cleaned_data.csv")
+```

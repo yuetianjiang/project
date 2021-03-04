@@ -1,0 +1,873 @@
+---
+title: "Data Wrangling"
+author: "Alice Jiang"
+date: "3/2/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+```
+
+## Data Wrangling
+```{r import_data}
+bankruptcy_financials <- read.csv("data/bankruptcy.csv")
+stock_price <- read.csv("data/stock price.csv")
+stock_price <- stock_price[, -(2:4)]
+oil <- read.csv("data/Brent Crude Oil.csv")
+cpi <- read.csv("data/Core CPI.csv")
+yield <- read.csv("data/3-month yield.csv")
+```
+
+```{r}
+# dim(bankruptcy_financials)
+# dim(stock_price)
+```
+
+```{r financial_data}
+data <- left_join(bankruptcy_financials, stock_price, by = "Symbol")
+# dim(data)
+```
+
+```{r year}
+data <- data %>%
+  mutate(
+    Date..RT.Last. = strptime(data$Date..RT.Last., "%m/%d/%Y"),
+    Year = year(Date..RT.Last.), # year of last trade
+    Month = month(Date..RT.Last.), # month of last trade
+  )
+```
+
+```{r subset_data}
+# 2010-2021
+data <- data %>%
+  filter(Year >= 2010)
+# dim(data)
+```
+
+```{r bankrupt}
+data <- data %>%
+  mutate(
+    Bankrupt = ifelse(Bankruptcy.Status == "BANKRUPT", 1, 0) # bankruptcy indicator
+  )
+```
+
+```{r convert_NA}
+data[6:8] <- lapply(data[6:8], function(x) ifelse(x == "-", NA, as.character(x)))
+data[11:216] <- lapply(data[11:216], function(x) ifelse(x == "-", NA, as.character(x)))
+data[217:277] <- lapply(data[217:277], function(x) ifelse(x == "-", NA, as.character(x)))
+```
+
+```{r match1}
+# matches the latest financial data available to each company based on their last trading year
+# E.g. Total.Assets (2021) | Total.Assets.11 (2010)
+match1 <- function(data, year, var) {
+  # data, data$Year, "", 
+  n <- rep(0, length(year))
+  var_new <- rep("", length(year))
+  output <- rep("", length(year))
+  for (i in 1:length(year)) {
+    while (TRUE) {
+      n[i] <- 2021 - year[i] 
+      #print(n[i])
+      if (n[i] == 0) {
+        var_new[i] <- var
+      }
+      else if (n[i] > 0) {
+        var_new[i] <- paste0(var, ".", n[i])
+      }
+      #print(var_new[i])
+      if (!is.na(data[[var_new[i]]][i])) { # data is available
+        output[i] <- data[[var_new[i]]][i]
+        break
+      }
+      if (n[i] == 11) { # loops to 2010 data 
+        output[i] <- NA 
+        break
+      }
+      year[i] <- year[i] - 1 # goes back one year if current data is NA
+    }
+  }
+  return(output)
+}
+```
+
+```{r financial_ratios}
+# cols <- c("Total_Assets", "Net_Sales", "EV_to_Sales", "EBITDA", "ROA", "ROE", "Working_Capital", 
+#           "Retained_Earnings", "Profit_Margin", "Debt_to_Assets", "Debt_to_Equity", "Interest_Coverage_Ratio",
+#           "Current_Ratio", "Cash_From_Operations", "Total_Debt", "Debt_to_EBITDA", "Interest_Expense", "Market_Value")
+# 
+# names <- c("Total.Assets", "Net.Sales", "Entrpr.Value..Sales", "EBITDA.Oper.Income",
+#            "Return.on.Avg.Total.Assets", "Return.on.Avg.Total.Equity", "Working.Capital.Total", 
+#           "Retain.Earns..Accum.Deficit", "Net.Income.Margin", "Total.Debt..Total.Assets",
+#           "Total.Debt..Equity", "Pretax.Int.Coverag",
+#           "Current.Ratio", "Net.Cash.Flow..Oper", "Total.L.T...S.T.Debt", "Total.Debt..EBITDA", 
+#           "Int.on.Debt.Expense", "Market.Value")
+
+data <- data %>%
+  mutate(Total_Assets = match1(data, data$Year, "Total.Assets"),
+         Net_Sales = match1(data, data$Year, "Net.Sales"),
+         EV_to_Sales = match1(data, data$Year, "Entrpr.Value..Sales"),
+         EBITDA = match1(data, data$Year, "EBITDA.Oper.Income"),
+         ROA = match1(data, data$Year, "Return.on.Avg.Total.Assets"), 
+         ROE = match1(data, data$Year, "Return.on.Avg.Total.Equity"),
+         Working_Capital = match1(data, data$Year, "Working.Capital.Total"),
+         Retained_Earnings = match1(data, data$Year, "Retain.Earns..Accum.Deficit"),
+         Profit_Margin = match1(data, data$Year, "Net.Income.Margin"),
+         Debt_to_Assets = match1(data, data$Year, "Total.Debt..Total.Assets"),
+         Debt_to_Equity = match1(data, data$Year, "Total.Debt..Equity"),
+         Interest_Coverage_Ratio = match1(data, data$Year, "Pretax.Int.Coverag"),
+         Current_Ratio = match1(data, data$Year, "Current.Ratio"),
+         Cash_From_Operations = match1(data, data$Year, "Net.Cash.Flow..Oper"),
+         Total_Debt = match1(data, data$Year, "Total.L.T...S.T.Debt"),
+         Debt_to_EBITDA = match1(data, data$Year, "Total.Debt..EBITDA"),
+         Interest_Expense = match1(data, data$Year, "Int.on.Debt.Expense"),
+         Market_Value = match1(data, data$Year, "Market.Value")
+  )
+```
+
+```{r match2}
+# matches the latest stock price available to each company based on their last trading year
+# E.g. Closing.Price_Dec (2020) | Closing.Price_Dec.11 (2009) 
+# E.g. Closing.Price_Mar (2020) | Closing.Price_Mar.10 (2010) 
+match2 <- function(data, year, var, start, end) {
+  # data, data$Year, "", (2020), (2009)
+  n <- rep(0, length(year))
+  var_new <- rep("", length(year))
+  output <- rep("", length(year))
+  for (i in 1:length(year)) {
+    if(year[i] == 2021) {
+      year[i] <- 2020 # use 2020 data instead
+    }
+    while (TRUE) {
+      n[i] <- start - year[i] # e.g. 2020
+      #print(n[i])
+      if (n[i] == 0) {
+        var_new[i] <- var
+      }
+      else if (n[i] > 0) {
+        var_new[i] <- paste0(var, ".", n[i])
+      }
+      #print(var_new[i])
+      if (!is.na(data[[var_new[i]]][i])) { # data is available
+        output[i] <- data[[var_new[i]]][i]
+        break
+      }
+      if (n[i] == start - end) { # loops to 2009/2010 data 
+        output[i] <- NA 
+        break
+      }
+      year[i] <- year[i] - 1 # goes back one year if current data is NA
+    }
+  }
+  return(output)
+}
+```
+
+
+```{r stock_price}
+# cols <- c("Closing_Price_Dec", "Closing_Price_Mar", "Closing_Price_Jun", "Closing_Price_Sep")
+# 
+# names <- c("Closing.Price_Dec", "Closing.Price_Mar", "Closing.Price_Jun", "Closing.Price_Sep")
+
+data <- data %>%
+  mutate(Closing_Price_Dec = match2(data, data$Year, "Closing.Price_Dec", 2020, 2009),
+         Closing_Price_Mar = match2(data, data$Year, "Closing.Price_Mar", 2020, 2010),
+         Closing_Price_Jun = match2(data, data$Year, "Closing.Price_Jun", 2020, 2010),
+         Closing_Price_Sep = match2(data, data$Year, "Closing.Price_Sep", 2020, 2010)
+  )
+```
+
+## Select Universe of Companies (bankrupt and non-bankrupt)
+```{r filter_data}
+final_data <- data %>%
+  select(Symbol, Name, Bankrupt, FactSet.Econ.Sector, FactSet.Ind, Entity.NAICS.Sector.Full, Year, Month, 281:302)
+# dim(final_data)
+
+cols <- c("Total_Assets", "Net_Sales", "EV_to_Sales", "EBITDA", "ROA", "ROE", "Working_Capital",
+          "Retained_Earnings", "Profit_Margin", "Debt_to_Assets", "Debt_to_Equity", "Interest_Coverage_Ratio",
+          "Current_Ratio", "Cash_From_Operations", "Total_Debt", "Debt_to_EBITDA", "Interest_Expense")
+
+final_data <- final_data %>%
+  filter_at(vars(cols), any_vars(!is.na(.))) # filter out obs with no financial data
+# dim(final_data)
+```
+
+```{r, message=FALSE, warning=FALSE}
+final_data[cols] <- lapply(final_data[cols], as.numeric)
+final_data$Bankrupt <- as.factor(final_data$Bankrupt)
+final_data <- final_data %>%
+  mutate(Bankrupt = ifelse(Bankrupt == 0, "No", "Yes"))
+cols <- c("Closing_Price_Dec", "Closing_Price_Mar", "Closing_Price_Jun", "Closing_Price_Sep", "Market_Value")
+final_data[cols] <- lapply(final_data[cols], as.numeric)
+```
+
+```{r distribution}
+final_data %>% 
+  filter(!is.na(Total_Assets)) %>%
+ggplot(aes(x = Total_Assets, fill = Bankrupt)) +
+  geom_histogram(binwidth = 50, alpha=0.5, position="identity")
+
+final_data %>%
+  filter(!is.na(Net_Sales)) %>%
+ggplot(aes(x = Net_Sales, fill = Bankrupt)) +
+  geom_histogram(binwidth = 50, alpha=0.5, position="identity")
+
+final_data %>%
+  filter(!is.na(Market_Value)) %>%
+ggplot(aes(x = Market_Value, fill = Bankrupt)) +
+  geom_histogram(binwidth = 50, alpha=0.5, position="identity")
+```
+
+```{r revenue}
+# in USD millions
+# https://www.sangoma.com/articles/smb-sme-large-enterprise-size-business-matters/
+final_data <- final_data %>%
+  mutate(Size = case_when(
+    Net_Sales <= 10 ~ "SMB", # 5-10 million
+    Net_Sales <= 1000 ~ "SME", # 10 million - 1 billion
+    Net_Sales > 1000 ~ "Large Enterprise") # over 1 billion
+  )
+final_data$Size <- as.factor(final_data$Size)
+```
+
+Companies with available revenue data fell under SMB or SME.
+
+```{r}
+final_data %>%
+  group_by(Size, Bankrupt) %>%
+  tally()
+```
+
+```{r mcap}
+# in USD millions
+# https://www.arborinvestmentplanner.com/market-capitalization-calculation-categories/
+final_data <- final_data %>%
+  mutate(Cap = case_when(
+    Market_Value <= 300 ~ "Micro-cap", # 50-300 million
+    Market_Value <= 2000 ~ "Small-cap", # 300 million - 2 billion
+    Market_Value <= 10000 ~ "Mid-cap", # 2-10 billion
+    Market_Value <= 200000 ~ "Large-cap", # 10-200 billion
+    Market_Value > 200000 ~ "Mega-cap") # over 200 billion
+  )
+final_data$Cap <- as.factor(final_data$Cap)
+```
+
+Companies with available MCAP data fell under micro- or small-cap.
+
+```{r}
+final_data %>%
+  group_by(Cap, Bankrupt) %>%
+  tally()
+```
+
+```{r proportion}
+final_data %>% 
+  filter(!is.na(Size)) %>%
+ggplot(aes(x = Size, fill = Bankrupt)) +
+  geom_bar(position = "fill") +
+  labs(x = "Category by Revenue Size", y = "Proportion", fill = "Bankrupt?")
+
+final_data %>%
+  filter(!is.na(Cap)) %>%
+ggplot(aes(x = Cap, fill = Bankrupt)) +
+  geom_bar(position = "fill") +
+  labs(x = "Category by Market Cap", y = "Proportion", fill = "Bankrupt?")
+```
+Slightly higher proportion of companies are considered SME by revenue size and micro-cap by market capitalization. We will use revenue size (also highly correlated with total assets) and size of market capitalization as metrics for determining peer companies of bankrupt ones.
+
+```{r}
+# library("GGally")
+# ggpairs(final_data, columns = c(9:10, 26), ggplot2::aes(colour = final_data$Bankrupt, alpha = 0.5))
+# ggcorr(final_data, method = c("pairwise", "pearson"))
+```
+
+```{r}
+final_data %>% 
+  filter(!is.na(Total_Assets)) %>%
+ggplot(aes(x = Total_Assets)) +
+  facet_grid(Bankrupt~., scales = "free") +
+  geom_histogram(binwidth = 50, alpha=0.5, position="identity")
+
+final_data %>% 
+  filter(!is.na(Net_Sales)) %>%
+ggplot(aes(x = Net_Sales)) +
+  facet_grid(Bankrupt~., scales = "free") +
+  geom_histogram(binwidth = 50, alpha=0.5, position="identity")
+
+final_data %>% 
+  filter(!is.na(Market_Value)) %>%
+ggplot(aes(x = Market_Value)) +
+  facet_grid(Bankrupt~., scales = "free") +
+  geom_histogram(binwidth = 50, alpha=0.5, position="identity")
+```
+
+Similar distribution of total asses, revenue, and MCAP for bankrupt and non-bankrupt companies.
+
+```{r}
+# final_data %>% 
+#   filter(!is.na(Market_Value)) %>%
+# ggplot(aes(x = Market_Value, fill = Bankrupt)) +
+#   facet_wrap(.~Cap) +
+#   geom_histogram(binwidth = 50, alpha=0.5, position="identity")
+# 
+# 
+# final_data %>%
+#   filter(!is.na(Total_Assets)) %>%
+# ggplot(aes(x = Total_Assets, fill = Bankrupt)) +
+#   facet_wrap(.~Size) +
+#   geom_histogram(binwidth = 50, alpha=0.5, position="identity")
+```
+
+```{r}
+# sector1 <- unique(final_data$FactSet.Econ.Sector)
+# sector2 <- unique(final_data$Entity.NAICS.Sector.Full)
+```
+
+```{r}
+# sector1 <- final_data %>%
+#   group_by(Bankrupt, FactSet.Econ.Sector) %>%
+#   tally()
+```
+
+```{r}
+# sector1_name <- sector1[[2]][22:42]
+# sector1_count <- sector1[[3]][22:42]
+# sector1_prop <- sector1_count / 385
+# list1 <- list(name = sector1_name,
+#              count = sector1_count,
+#              prop = sector1_count)
+```
+
+```{r}
+final_data %>%
+  group_by(Bankrupt) %>%
+  tally()
+```
+385 Bankrupt
+11944 Not Bankrupt
+
+#### NAICS Sector
+```{r 11 - Agriculture, Forestry, Fishing and Hunting}
+sector <- "11 - Agriculture, Forestry, Fishing and Hunting"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB and Micro-cap (n=1)
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	and Micro-cap	(n=61)	
+```
+
+```{r 21 - Mining, Quarrying, and Oil and Gas Extraction}
+sector <- "21 - Mining, Quarrying, and Oil and Gas Extraction"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	and Micro-cap	(n=22)		
+# SME	and Micro-cap	(n=30)	
+# SME	and Small-cap	(n=6)	
+
+# SMB	NA	1		
+# SME	NA	1		
+# NA	Micro-cap	4		
+# NA	Small-cap	1		
+# NA	NA	2		
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB and	Micro-cap	(n=529)
+# SME and	Micro-cap	(n=127)		
+# SME	and Small-cap	(n=40)
+```
+
+```{r 22 - Utilities}
+sector <- "22 - Utilities"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB and	Micro-cap	(n=1)		
+# SME	and Micro-cap	(n=3)		
+
+# NA	Micro-cap	1		
+# NA	NA	1	
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	and Micro-cap	(n=69)		
+# SME	and Micro-cap	(n=23)		
+```
+
+```{r 23 - Construction}
+sector <- "23 - Construction"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	and Micro-cap	(n=3)		
+# SME	and Micro-cap	(n=3)
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	and Micro-cap	(n=73)		
+# SME	and Micro-cap	(n=40)
+```
+
+```{r 31 - Manufacturing}
+sector <- "31 - Manufacturing"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB and	Micro-cap	(n=55)		
+# SMB	and Small-cap	(n=1)	
+# SME	and Micro-cap	(n=56)		
+# SME	and Small-cap	(n=7)		
+
+# SMB	NA	5	
+# SME	NA	2		
+# NA	Micro-cap	5		
+# NA	Small-cap	1		
+# NA	NA	2	
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	and Micro-cap	1333		
+# SMB	and Small-cap	77		
+# SME	and Micro-cap	823		
+# SME	and Small-cap	317		
+```
+
+```{r 42 - Wholesale Trade}
+sector <- "42 - Wholesale Trade"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	3		
+# SME	Micro-cap	3		
+# SME	Small-cap	1		
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	125		
+# SME	Micro-cap	70	
+# SME	Small-cap	4	
+```
+
+```{r 44 - Retail Trade}
+sector <- "44 - Retail Trade"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	1		
+# SME	Micro-cap	19		
+
+# NA	Micro-cap	12		
+# NA	Small-cap	4		
+# NA	NA	3	
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	106		
+# SME	Micro-cap	72		
+```
+                                                         
+```{r 48 - Transportation and Warehousing}
+sector <- "48 - Transportation and Warehousing"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	1		
+# SME	Micro-cap	6		
+
+# NA	Micro-cap	1		
+# NA	NA	1	
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	26		
+# SME	Micro-cap	73		
+```
+
+```{r 51 - Information}
+sector <- "51 - Information"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	14		
+# SME	Micro-cap	10	
+
+# SMB	NA	1		
+# NA	Micro-cap	1		
+# NA	Small-cap	1
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	451		
+# SME	Micro-cap	217		
+```
+
+```{r 52 - Finance and Insurance}
+sector <- "52 - Finance and Insurance"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	7		
+# SME	Micro-cap	13		
+# SME	Small-cap	4
+
+# SMB	NA	1
+# SME	NA	1		
+# NA	Micro-cap	1
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	604		
+# SME	Micro-cap	758		
+# SME	Small-cap	263	
+```
+
+```{r 53 - Real Estate and Rental and Leasing}
+sector <- "53 - Real Estate and Rental and Leasing"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SME	Micro-cap	3		
+# NA	Micro-cap	1	
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SME	Micro-cap	60	
+```
+     
+```{r 54 - Professional, Scientific, and Technical Services}
+sector <- "54 - Professional, Scientific, and Technical Services"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	11		
+# SME	Micro-cap	13		
+# NA	Micro-cap	2	
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	341		
+# SME	Micro-cap	154		
+```
+
+```{r 55 - Management of Companies and Enterprises}
+sector <- "55 - Management of Companies and Enterprises"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SME	Micro-cap	3	
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SME	Micro-cap	183	
+```
+
+```{r 56 - Administrative and Support and Waste Management and Remediation Services}
+sector <- "56 - Administrative and Support and Waste Management and Remediation Services"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	2		
+# SME	Micro-cap	3		
+# SME	Small-cap	1	
+# SMB	NA	1		
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	130		
+# SME	Micro-cap	60		
+# SME	Small-cap	19		
+```
+
+```{r 61 - Educational Services}
+sector <- "61 - Educational Services"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	1		
+# SME	Micro-cap	1	
+
+# SME	NA	1		
+# NA	Micro-cap	1
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	18		
+# SME	Micro-cap	16		
+```
+    
+```{r 62 - Health Care and Social Assistance}
+sector <- "62 - Health Care and Social Assistance"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	2		
+# SME	Micro-cap	5
+# SMB	NA	1	
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	62		
+# SME	Micro-cap	31		
+```
+
+```{r 71 - Arts, Entertainment, and Recreation}
+sector <- "71 - Arts, Entertainment, and Recreation"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SME	Micro-cap	3		
+# SME	NA	1	
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SME	Micro-cap	23	
+```
+          
+```{r 72 - Accommodation and Food Services}
+sector <- "72 - Accommodation and Food Services"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	2		
+# SME	Micro-cap	3	
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	31		
+# SME	Micro-cap	49		
+```
+
+```{r 81 - Other Services (except Public Administration)}
+sector <- "81 - Other Services (except Public Administration)"
+final_data %>%
+  filter(Bankrupt == "Yes") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	1	
+
+final_data %>%
+  filter(Bankrupt == "No") %>%
+  filter(Entity.NAICS.Sector.Full == sector) %>%
+  group_by(Size, Cap) %>%
+  tally()
+# SMB	Micro-cap	29	
+```
+                                
+```{r}
+subset_final_data <- final_data %>%
+  filter(Bankrupt == "Yes" |
+          (Entity.NAICS.Sector.Full == "11 - Agriculture, Forestry, Fishing and Hunting" & 
+         Size == "SMB" & Cap == "Micro-cap") |
+          (Entity.NAICS.Sector.Full == "21 - Mining, Quarrying, and Oil and Gas Extraction" & 
+         ((Size == "SMB" & Cap == "Micro-cap") | (Size == "SME" & Cap == "Micro-cap") | 
+         (Size == "SME" & Cap == "Small-cap"))) |
+          (Entity.NAICS.Sector.Full == "22 - Utilities" & 
+         ((Size == "SMB" & Cap == "Micro-cap") | (Size == "SME" & Cap == "Micro-cap"))) |
+          (Entity.NAICS.Sector.Full == "23 - Construction" & 
+         ((Size == "SMB" & Cap == "Micro-cap") | (Size == "SME" & Cap == "Micro-cap"))) |
+          (Entity.NAICS.Sector.Full == "31 - Manufacturing" & 
+         ((Size == "SMB" & Cap == "Micro-cap") | (Size == "SME" & Cap == "Micro-cap") | 
+         (Size == "SMB" & Cap == "Small-cap") | (Size == "SME" & Cap == "Small-cap"))) |
+          (Entity.NAICS.Sector.Full == "42 - Wholesale Trade" & 
+         ((Size == "SMB" & Cap == "Micro-cap") | (Size == "SME" & Cap == "Micro-cap") | 
+         (Size == "SME" & Cap == "Small-cap"))) |
+          (Entity.NAICS.Sector.Full == "44 - Retail Trade" & 
+         ((Size == "SMB" & Cap == "Micro-cap") | (Size == "SME" & Cap == "Micro-cap"))) |
+          (Entity.NAICS.Sector.Full == "48 - Transportation and Warehousing" & 
+         ((Size == "SMB" & Cap == "Micro-cap") | (Size == "SME" & Cap == "Micro-cap"))) |
+          (Entity.NAICS.Sector.Full == "51 - Information" & 
+         ((Size == "SMB" & Cap == "Micro-cap") | (Size == "SME" & Cap == "Micro-cap"))) |
+          (Entity.NAICS.Sector.Full == "52 - Finance and Insurance" & 
+         ((Size == "SMB" & Cap == "Micro-cap") | (Size == "SME" & Cap == "Micro-cap") | 
+         (Size == "SME" & Cap == "Small-cap"))) |
+          (Entity.NAICS.Sector.Full == "53 - Real Estate and Rental and Leasing" & 
+         Size == "SME" & Cap == "Micro-cap") |
+          (Entity.NAICS.Sector.Full == "54 - Professional, Scientific, and Technical Services" & 
+         ((Size == "SMB" & Cap == "Micro-cap") | (Size == "SME" & Cap == "Micro-cap"))) |
+          (Entity.NAICS.Sector.Full == "55 - Management of Companies and Enterprises" & 
+         Size == "SME" & Cap == "Micro-cap") |
+          (Entity.NAICS.Sector.Full == "56 - Administrative and Support and Waste Management and Remediation Services" & 
+         ((Size == "SMB" & Cap == "Micro-cap") | (Size == "SME" & Cap == "Micro-cap") | 
+         (Size == "SME" & Cap == "Small-cap"))) |
+          (Entity.NAICS.Sector.Full == "61 - Educational Services" & 
+         ((Size == "SMB" & Cap == "Micro-cap") | (Size == "SME" & Cap == "Micro-cap"))) |
+          (Entity.NAICS.Sector.Full == "62 - Health Care and Social Assistance" & 
+         ((Size == "SMB" & Cap == "Micro-cap") | (Size == "SME" & Cap == "Micro-cap"))) |
+          (Entity.NAICS.Sector.Full == "71 - Arts, Entertainment, and Recreation" & 
+         Size == "SME" & Cap == "Micro-cap") |
+          (Entity.NAICS.Sector.Full == "72 - Accommodation and Food Services" & 
+         ((Size == "SMB" & Cap == "Micro-cap") | (Size == "SME" & Cap == "Micro-cap"))) |
+          (Entity.NAICS.Sector.Full == "81 - Other Services (except Public Administration)" & 
+         Size == "SMB" & Cap == "Micro-cap")
+        )
+```
+
+```{r NAICS_sectors}
+groups <- subset_final_data %>%
+  group_by(Bankrupt, Entity.NAICS.Sector.Full) %>%
+  tally()
+
+subset_final_data %>%
+  group_by(Bankrupt) %>%
+  tally()
+```
+
+385 Bankrupt
+7487 Not Bankrupt
+
+```{r}
+# Bankrupt = No
+# groups1_name <- groups[[2]][1:19]
+# groups1_count <- groups[[3]][1:19]
+# groups1_prop <- groups1_count / 7487
+# list1 <- list(name = groups1_name,
+#              count = groups1_count,
+#              prop = groups1_prop)
+# 
+# Bankrupt = Yes
+# groups2_name <- groups[[2]][20:38]
+# groups2_count <- groups[[3]][20:38]
+# groups2_prop <- groups2_count / 385
+# list2 <- list(name = groups2_name,
+#              count = groups2_count,
+#              prop = groups2_prop)
+```
+
+```{r}
+# list <- list(name = groups1_name,
+#              diff = groups2_prop - groups1_prop)
+# 
+# list
+```
+<!-- 52 - Finance and Insurance -->
+
+```{r}
+subset_final_data <- subset_final_data %>%
+  mutate(Working_Capital_to_Total_Assets = 
+           Working_Capital / Total_Assets,
+         Retained_Earnings_to_Total_Assets = 
+           Retained_Earnings / Total_Assets,
+         EBITDA_to_Total_Assets = 
+           EBITDA / Total_Assets,
+         Sales_to_Total_Assets =
+           Net_Sales / Total_Assets,
+         EBITDA_Interest_Coverage_Ratio =
+           EBITDA / Interest_Expense,
+         Cash_Flow_to_Total_Debt = 
+           Cash_From_Operations / Total_Debt
+         )
+  
+cleaned_data <- subset_final_data %>%
+  select(1:3, 6:8, "ROA", "ROE", "Working_Capital_to_Total_Assets",
+         "Retained_Earnings_to_Total_Assets", "EBITDA_to_Total_Assets",
+         "Debt_to_EBITDA", "Sales_to_Total_Assets", "Profit_Margin",
+         "Debt_to_Assets", "Debt_to_Equity", "Current_Ratio", "Interest_Coverage_Ratio",
+         "EBITDA_Interest_Coverage_Ratio", "Cash_Flow_to_Total_Debt",
+         27:30
+         )
+#dim(cleaned_data)
+```
+
+

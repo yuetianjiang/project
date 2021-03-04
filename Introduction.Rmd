@@ -1,0 +1,38 @@
+---
+title: "Project Introduction: Bankruptcy Prediction Models for US Companies"
+author: "Alice Jiang"
+date: "3/2/2021"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    number_sections: yes
+  html_document:
+    df_print: paged
+fontsize: 11pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(tinytex.verbose = TRUE)
+```
+
+```{r, include=FALSE}
+cleaned_data <- read.csv("cleaned_data.csv")
+```
+
+# Introduction
+
+US corporate bankruptcy reached its highest level in a decade in 2020 amid the COVID-19 pandemic. A total of 630 public and private companies declared bankruptcy in 2020, and businesses large and small across industries are succumbing to the effects of the coronavirus^1^. Several high-profile companies, including The Hertz Corp., J.Crew Group, Inc., Frontier Communications Corp., and Diamond Offshore Drilling, Inc., filed for bankruptcy as the pandemic and lockdown suppressed economic activity^2^. Entering into 2021, economic recovery proves to be sluggish than expected, delayed by slow vaccine rollouts. As companies continue to struggle under growing debt burdens and subdued revenues, the wave of bankruptcies could get bigger. In times like these, the ability to accurately predict financial distress and bankruptcy for companies becomes particularly relevant. Accurate prediction of corporate bankruptcy can have important implications for creditors, shareholders, suppliers, employees and other parties, as well as potential cost savings for the overall economy. 
+
+## Project Objective
+
+In this study, we will investigate key financial, market, and macroeconomic factors that predict bankruptcy for publicly listed US companies. Bankruptcy is defined by the action when a company files for either Chapter 7 or Chapter 11 under the United States Bankruptcy Code. A case filed under Chapter 7 results in the liquidation of the company, as all business operations are ceased and assets are sold to pay off debts owed to creditors. Chapter 11 bankruptcy is referred to as the reorganization bankruptcy, under which the company refinances and restructures its business in order to become solvent again^3^. The financial, market, and macroeconomic variables will be selected based on prior bankruptcy prediction studies and common practice in credit analysis. Since researchers have found that a large number of factors does not necessarily improve a model's predictive ability for bankruptcy, we aim to build a parsimonious model with high predictive power for corporate bankruptcy (Gissel, et al., 2007)^4^.
+
+## Data
+
+The main dataset and market variable dataset are collected on March 2, 2021 through a universal screening on FactSet for publicly listed US companies. FactSet is a research platform that consolidates data and analytics on global companies and financial and economic markets. We screened for publicly listed US companies based on two criteria: 1) the company is traded on a US stock exchange, and 2) the company has operations in the US. The main dataset, or financial variable dataset, includes information on a company's name, sector, entity status, last trading date, and financial information like total assets, revenue, total debt, etc. from 2010 to 2020. The market variable dataset includes information on a company's stock price at the end of each quarter and market capitalization at the end of each year from 2010 to 2020, as well as a stock's 3-yr and 5-yr price volatility. In addition, we collected data on various macroeconomic variables, including the Consumer Price Index (CPI), Brent Crude oil price, 3-month US Treasury yield, and monthly changes in nonfarm payroll. Monthly changes in nonfarm payroll are obtained from FactSet economics data, and all other data are obtained from the Federal Reserve Economic Data (FRED) database^8^. These macroeconomic variables represent monthly statistics over the period from 2010 to 2020.
+
+
+### Data Preprocessing
+
+

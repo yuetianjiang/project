@@ -26,13 +26,79 @@ US corporate bankruptcy reached its highest level in a decade in 2020 amid the C
 
 ## Project Objective
 
-In this study, we will investigate key financial, market, and macroeconomic factors that predict bankruptcy for publicly listed US companies. Bankruptcy is defined by the action when a company files for either Chapter 7 or Chapter 11 under the United States Bankruptcy Code. A case filed under Chapter 7 results in the liquidation of the company, as all business operations are ceased and assets are sold to pay off debts owed to creditors. Chapter 11 bankruptcy is referred to as the reorganization bankruptcy, under which the company refinances and restructures its business in order to become solvent again^3^. The financial, market, and macroeconomic variables will be selected based on prior bankruptcy prediction studies and common practice in credit analysis. Since researchers have found that a large number of factors does not necessarily improve a model's predictive ability for bankruptcy, we aim to build a parsimonious model with high predictive power for corporate bankruptcy (Gissel, et al., 2007)^4^.
+In this study, we will investigate key financial, market, and macroeconomic factors that predict bankruptcy for publicly listed US companies. Bankruptcy is defined by the action when a company files for either Chapter 7 or Chapter 11 under the United States Bankruptcy Code. A case filed under Chapter 7 results in the liquidation of the company, as all business operations are ceased and assets are sold to pay off debts owed to creditors. Chapter 11 bankruptcy is referred to as the reorganization bankruptcy, under which the company refinances and restructures its business in order to become solvent again^3^. The financial, market, and macroeconomic variables will be selected based on prior bankruptcy prediction studies and common practice in credit analysis. Since researchers have found that a large number of factors does not necessarily improve a model's predictive ability for bankruptcy, we aim to build a parsimonious model with high predictive power for US corporate bankruptcy (Gissel et al., 2007)^4^.
+
+## Relevant Literature
+
+Extensive research has focused on analyzing financial ratios for bankruptcy prediction. In recent years, researchers have also looked at a combined approach to bankruptcy prediction, including not only financial ratios but also market variables, as well as macroeconomic factors. Tinoco and Wilson (2013) studied bankruptcy prediction among listed UK companies using financial ratios, market and macroeconomic variables^6^. The study found that market variables provide additional information not contained in the financial ratios and help improve accuracy in the prediction model. Results for macroeconomic variables, however, are less conclusive. Although macroeconomic indicators are not commonly included in bankruptcy prediction models, and so far they have shown weak evidence of improvement for prediction accuracy, we believe recent events have shown the impact of macro environment on the survival of companies.
 
 ## Data
 
-The main dataset and market variable dataset are collected on March 2, 2021 through a universal screening on FactSet for publicly listed US companies. FactSet is a research platform that consolidates data and analytics on global companies and financial and economic markets. We screened for publicly listed US companies based on two criteria: 1) the company is traded on a US stock exchange, and 2) the company has operations in the US. The main dataset, or financial variable dataset, includes information on a company's name, sector, entity status, last trading date, and financial information like total assets, revenue, total debt, etc. from 2010 to 2020. The market variable dataset includes information on a company's stock price at the end of each quarter and market capitalization at the end of each year from 2010 to 2020, as well as a stock's 3-yr and 5-yr price volatility. In addition, we collected data on various macroeconomic variables, including the Consumer Price Index (CPI), Brent Crude oil price, 3-month US Treasury yield, and monthly changes in nonfarm payroll. Monthly changes in nonfarm payroll are obtained from FactSet economics data, and all other data are obtained from the Federal Reserve Economic Data (FRED) database^8^. These macroeconomic variables represent monthly statistics over the period from 2010 to 2020.
-
+The main dataset and market variable dataset are collected on March 2, 2021 through a screening for publicly listed US companies on FactSet. FactSet is a research platform that consolidates data and analytics on global companies and financial and economic markets^[5]^. We screened for publicly listed US companies based on two criteria: 1) the company is traded on a US stock exchange, and 2) the company has operations in the US. The main dataset, or financial variable dataset, includes information on a company's name, sector, entity status, last trading date, and financial information like total assets, revenue, total debt, etc. from 2010 to 2020. The market variable dataset includes information on a company's stock price at the end of each quarter and market capitalization at the end of each year from 2010 to 2020, as well as a stock's 3-yr and 5-yr price volatility. In addition, we collected monthly data on various macroeconomic variables, including the Consumer Price Index (CPI), Brent Crude oil price, 3-month US Treasury yield, and monthly changes in nonfarm payroll, over the period from 2010 to 2020. Monthly changes in nonfarm payroll are obtained from FactSet economics data, and all other data are obtained from the Federal Reserve Economic Data (FRED) database^8^. 
 
 ### Data Preprocessing
+
+We included companies that filed for bankruptcy from January 1, 2010 to December 31, 2020 as bankrupt companies in the sample. In the main dataset, these companies are identified by their entity status - bankrupt. We then created a binary variable to indicate whether a company is bankrupt or not. To obtain the time (i.e. month and year) of bankruptcy, we used the company's last trading date as a reasonable reference, since companies that file for bankruptcy in most cases get delisted from stock exchanges and discontinue trading^7^. We matched the company's financial data one year prior to bankruptcy based on its year of last trading date, and in the cases when there is no available data for that year, we used the company's latest available financial data instead (e.g. two years prior). To ensure that the data of a company reflect the financial, market, and macroeconomic conditions during the same time period, we added a new variable to keep track of the year of financial data used, which could be the year of bankruptcy or the year of latest data used. We then matched the macroeconomic data one year prior to a company's bankruptcy based on the latest year. 
+
+Our sample of non-bankrupt companies were selected within the same sector and size as the bankrupt companies. Sectors were categorized based on the North American Industry Classification System (NAICS) code. The dataset includes companies in 19 NAICS sectors, including Manufacturing; Finance and Insurance; Mining, Quarrying, and Oil and Gas Extraction; Information; and Professional, Scientific, and Technical Services. Size was distinguished based on two metrics: revenue size and market value. Specifically, companies were classified as Small and Medium-Sized Businesses (SMB) if revenue was less than or equal to \$10 million and Small and Medium Enterprises (SME) if revenue was between \$10 million and \$1 billion^[9]^; companies were classified as Micro-cap if market value was less than or equal to $300 million and Small-cap if market value was between \$300 million and \$2 billion^[10]^. No bankrupt or non-bankrupt companies in the dataset had revenue or market value above \$1 billion or \$2 billion, respectively. After excluding companies with missing data for all of the financial variables, we obtained our final dataset made up of 385 bankrupt companies and 7,487 non-bankrupt companies with financial, market, and macroeconomic data over the decade from 2010-2020.
+
+### Variables of Interest
+
+We selected 15 financial ratios, 3 market variables, and 4 macroeconomic factors as explanatory variables in our bankruptcy prediction model. We also created a binary response that takes on a value of 1 if the company is bankrupt or 0 if not bankrupt. 
+
+The financial ratios measure the profitability, liquidity, or leverage of a company and were chosen based on prior research and practice in credit analysis. Of the 752 different factors considered in 165 bankruptcy prediction studies from 1930-2007 as reviewed in Gissel et al. (2007), Return on Assets, Current Ratio, Working Capital / Total Assets, Retained Earnings / Total Assets, Sales / Total Assets are the most commonly included variables^4^. These last three variables, along with Market Capitalization / Total Debt, are also used in the Altman Z-Score calculation, a weighted sum of financial ratios that is commonly used to predict the probability of corporate bankruptcy^5^. 
+
+### EDA 
+
+Financial Ratios
+
+- Return on Assets (ROA)
+- Return on Equity (ROE)
+- Working Capital / Total Assets
+- Retained Earnings / Total Assets
+- EBITDA / Total Assets 
+<!-- EBIT / Total Assets -->
+- Debt / EBITDA
+- Sales / Total Assets
+- Profit Margin (Net Income / Sales)
+- Debt to Assets (DOA)
+- Debt to Equity (DOE)
+- Current Ratio (Current Assets / Current Liabilities)
+- Interest Coverage Ratio (EBIT / Interest Expense) 
+- Interest Coverage Ratio using EBITDA (EBITDA / Interest Expense) 
+- Cash Flow to Total Debt (Cash from Operations / Total Debt)
+
+Market Variables
+
+- Stock Price
+- Stock Price Volatility
+- Market Capitalization / Total Debt
+
+Macroeconomic Indicators
+
+- 3-month US Treasury Yield (inflation-adjusted) https://fred.stlouisfed.org/series/DGS3MO#0
+- Consumer Price Index (base 100) https://fred.stlouisfed.org/series/CPILFESL
+- Monthly Changes in Nonfarm Payroll
+- Crude Oil Price https://fred.stlouisfed.org/series/POILBREUSDM
+
+
+# References
+
+1. https://www.spglobal.com/marketintelligence/en/news-insights/latest-news-headlines/us-corporate-bankruptcies-end-2020-at-10-year-high-amid-covid-19-pandemic-61973656
+2. https://www.nytimes.com/2020/06/18/business/corporate-bankruptcy-coronavirus.html
+3. https://www.sec.gov/reportspubs/investor-publications/investorpubsbankrupthtm.html
+4. https://epublications.marquette.edu/cgi/viewcontent.cgi?article=1025&context=account_fac
+5. http://pages.stern.nyu.edu/~ealtman/Zscores.pdf
+6. https://www.sciencedirect.com/science/article/pii/S1057521913000227
+7. https://www.sec.gov/cgi-bin/srch-edgar?text=form-type%3D25-nse&first=2017&last=2020
+8. https://fred.stlouisfed.org/
+
+5 https://www.factset.com/
+9 https://www.sangoma.com/articles/smb-sme-large-enterprise-size-business-matters/
+10 https://www.arborinvestmentplanner.com/market-capitalization-calculation-categories/
+
+
+
+
 
 

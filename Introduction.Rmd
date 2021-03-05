@@ -94,8 +94,12 @@ cleaned_data %>%
   filter(!is.na(X3y.Price.Volatility)) %>%
 ggplot(aes(x = X3y.Price.Volatility, fill = Bankrupt)) +
   geom_density(alpha = 0.5)
-```
 
+cleaned_data %>%
+  filter(!is.na(Closing_Price_Jun)) %>%
+ggplot(aes(x = Closing_Price_Jun, fill = Bankrupt)) +
+  geom_density(alpha = 0.5)
+```
 
 # Appendix
 
